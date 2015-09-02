@@ -1716,11 +1716,12 @@ and automatically removed when killed."
 The ns is extracted from the ns form for Clojure buffers and from
 `cider-buffer-ns' for all other buffers.  If it's missing, use the current
 REPL's ns, otherwise fall back to \"user\"."
-  (or cider-buffer-ns
-      (clojure-find-ns)
-      (-when-let (repl-buf (cider-current-connection))
-        (buffer-local-value 'cider-buffer-ns repl-buf))
-      "user"))
+  (save-match-data
+    (or cider-buffer-ns
+        (clojure-find-ns)
+        (-when-let (repl-buf (cider-current-connection))
+          (buffer-local-value 'cider-buffer-ns repl-buf))
+        "user")))
 
 
 ;;; Evaluation
