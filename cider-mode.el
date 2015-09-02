@@ -33,6 +33,7 @@
 (require 'cider-interaction)
 (require 'cider-eldoc)
 (require 'cider-repl)
+(require 'cider-resolve)
 
 (defcustom cider-mode-line-show-connection t
   "If the mode-line lighter should detail the connection."
@@ -178,6 +179,50 @@ entirely."
         ["Version info" cider-version]))
     map))
 
+
+(defconst cider-font-lock-keywords
+  `( ;; Top-level variable definition
+    (,(concat "(\\(?:clojure.core/\\)?\\("
+              (regexp-opt '("def" "defonce"))
+              ;; variable declarations
+              "\\)\\>"
+              ;; Any whitespace
+              "[ \r\n\t]*"
+              ;; Possibly type or metadata
+              "\\(?:#?^\\(?:{[^}]*}\\|\\sw+\\)[ \r\n\t]*\\)*"
+              "\\(\\sw+\\)?")
+     (1 font-lock-keyword-face)
+     (2 (cider-matched-symbol-face-spec 2 font-lock-variable-name-face) nil t))
+    ;; Type definition
+    (,(concat "(\\(?:clojure.core/\\)?\\("
+              (regexp-opt '("defstruct" "deftype" "defprotocol"
+                            "defrecord"))
+              ;; type declarations
+              "\\)\\>"
+              ;; Any whitespace
+              "[ \r\n\t]*"
+              ;; Possibly type or metadata
+              "\\(?:#?^\\(?:{[^}]*}\\|\\sw+\\)[ \r\n\t]*\\)*"
+              "\\(\\sw+\\)?")
+     (1 font-lock-keyword-face)
+     (2 (cider-matched-symbol-face-spec 2 font-lock-type-face) nil t))
+    ;; Function definition (anything that starts with def and is not
+    ;; listed above)
+    (,(concat "(\\(?:[a-z\.-]+/\\)?\\(def[^ \r\n\t]*\\)"
+              ;; Function declarations
+              "\\>"
+              ;; Any whitespace
+              "[ \r\n\t]*"
+              ;; Possibly type or metadata
+              "\\(?:#?^\\(?:{[^}]*}\\|\\sw+\\)[ \r\n\t]*\\)*"
+              "\\(\\sw+\\)?")
+     (1 font-lock-keyword-face)
+     (2 (cider-matched-symbol-face-spec 2 font-lock-function-name-face) nil t))
+    ("\\(?:\\<\\|\\.\\)@?\\([a-zA-Z][a-zA-Z0-9$_-]*\\)/\\([a-zA-Z][a-zA-Z0-9$_-]*\\)"
+     (1 font-lock-type-face)
+     (2 (cider-matched-symbol-face-spec 2 nil) nil t))
+    ("\\_<[a-zA-Z][a-zA-Z0-9$_-]*\\_>" 0 (cider-matched-symbol-face-spec 0 nil) nil t)))
+
 ;;;###autoload
 (define-minor-mode cider-mode
   "Minor mode for REPL interaction from a Clojure buffer.
@@ -190,7 +235,8 @@ entirely."
   (make-local-variable 'completion-at-point-functions)
   (add-to-list 'completion-at-point-functions
                #'cider-complete-at-point)
-  (setq next-error-function #'cider-jump-to-compilation-error))
+  (setq next-error-function #'cider-jump-to-compilation-error)
+  (font-lock-add-keywords nil cider-font-lock-keywords))
 
 (provide 'cider-mode)
 

@@ -178,7 +178,14 @@ Currently, this is only used to keep `cider-repl-type' updated."
     (-when-let (state (nrepl-dict-get response "state"))
       (nrepl-dbind-response state (repl-type changed-namespaces)
         (setq cider-repl-type repl-type)
-        (setq cider-repl-ns-cache (nrepl-dict-merge cider-repl-ns-cache changed-namespaces))))))
+        (setq cider-repl-ns-cache (nrepl-dict-merge cider-repl-ns-cache changed-namespaces))
+        (unless (nrepl-dict-empty-p changed-namespaces)
+          (dolist (b (buffer-list))
+            (with-current-buffer b
+              (when (and (derived-mode-p 'clojure-mode)
+                         (nrepl-dict-get changed-namespaces (cider-current-ns)))
+                (font-lock-flush)
+                (font-lock-fontify-block)))))))))
 
 (defun cider-repl-create (endpoint)
   "Create a REPL buffer and install `cider-repl-mode'.

@@ -57,16 +57,49 @@ Return nil only if VAR cannot be resolved."
          (unless (equal ns "clojure.core")
            (cider-resolve-var "clojure.core" name)))))))
 
-(defun cider-match-instrumented-symbol (n face)
+(defun cider--valid-macro-place-p (pos)
+  "Return non-nil if POS points to a valid place for a macro.
+This is either after a `(' or after a `#''.
+Because you cannot take the value of macros in Clojure, a lone symbol like
+`ns' is guaranteed to not be a macro."
+  (ignore-errors
+    (save-excursion
+      (goto-char pos)
+      (forward-char -1)
+      (or (eq (char-after) ?\()
+          (and (eq (char-after) ?\')
+               (eq (char-before) ?\#))))))
+
+(defun cider-matched-symbol-face-spec (n face)
   "Return a face specification for font-locking.
-If (match-string N) is an instrumented symbol, return 
-    (face cider-instrumented-face FACE)
+If (match-string N) is an instrumented symbol, return the list
+    (face (FACE cider-instrumented-face))
 otherwise, return (face FACE)."
-  (cons 'face
-        (if (nrepl-dict-get (cider-resolve-var (cider-current-ns) (match-string n))
-                            "cider-instrumented")
-            `((cider-instrumented-face ,face))
-          (list face))))
+  (let* ((decoration-level (font-lock-value-in-major-mode font-lock-maximum-decoration))
+         (var (match-string n))
+         (meta (cider-resolve-var (cider-current-ns) var))
+         (spec (append (when face (list face))
+                       (when (nrepl-dict-get meta "cider-instrumented")
+                         '(cider-instrumented-face))
+                       (when decoration-level
+                         (unless (and (numberp decoration-level)
+                                      (< decoration-level 2))
+                           ;; Is it a macro, function, or var? And do we want to
+                           ;; font-lock that much?
+                           (cond
+                            ((nrepl-dict-get meta "macro")
+                             (when (cider--valid-macro-place-p (match-beginning n))
+                               '(font-lock-keyword-face)))
+                            ((nrepl-dict-get meta "arglists")
+                             (unless (and (numberp decoration-level)
+                                          (< decoration-level 3))
+                               '(font-lock-function-name-face)))
+                            (meta
+                             (unless (and (numberp decoration-level)
+                                          (< decoration-level 4))
+                               '(font-lock-variable-name-face)))))))))
+    (when spec
+      (list 'face spec))))
 
 (provide 'cider-resolve)
 ;;; cider-resolve.el ends here
