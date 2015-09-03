@@ -18,6 +18,46 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+;;
+;; The ns cache is a dict of namespaces stored in the connection buffer. This
+;; file offers functions to easily get information about variables from this
+;; cache, given the variable's name and the file's namespace.
+;;
+;; Below is a typical entry on this cache dict. Note that clojure.core symbols
+;; are excluded from the refers to save space.
+;;
+;; "cider.nrepl.middleware.track-state"
+;; (dict "aliases"
+;;       (dict "cljs" "cider.nrepl.middleware.util.cljs"
+;;             "misc" "cider.nrepl.middleware.util.misc"
+;;             "set" "clojure.set")
+;;       "interns" (dict "assoc-state"
+;;                       (dict "arglists"
+;;                             (("response"
+;;                               (dict "as" "msg" "keys"
+;;                                     ("session")))))
+;;                       "filter-core"
+;;                       (dict "arglists"
+;;                             (("refers")))
+;;                       "make-transport"
+;;                       (dict "arglists"
+;;                             (((dict "as" "msg" "keys"
+;;                                     ("transport")))))
+;;                       "ns-as-map"
+;;                       (dict "arglists"
+;;                             (("ns")))
+;;                       "ns-cache"
+;;                       (dict)
+;;                       "relevant-meta"
+;;                       (dict "arglists"
+;;                             (("var")))
+;;                       "update-vals"
+;;                       (dict "arglists"
+;;                             (("m" "f")))
+;;                       "wrap-tracker"
+;;                       (dict "arglists"
+;;                             (("handler"))))
+;;       "refers" (dict "set-descriptor!" "#'clojure.tools.nrepl.middleware/set-descriptor!"))
 
 ;;; Code:
 
