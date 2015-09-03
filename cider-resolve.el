@@ -57,6 +57,49 @@ Return nil only if VAR cannot be resolved."
          (unless (equal ns "clojure.core")
            (cider-resolve-var "clojure.core" name)))))))
 
+(defun cider-resolve-var-ns (ns var)
+  "Return a string of the namespace of a clojure var VAR.
+VAR is a string. NS is the current namespace.
+Return nil only if VAR cannot be resolved."
+  (let ((prefix-regexp "\\`\\([^/]+\\)/"))
+    (-if-let ((var-ns (when (string-match prefix-regexp var)
+                        (cider-resolve-alias ns (match-string 1 var)))))
+        var-ns
+      (if (cider-resolve--get-in ns "interns" var)
+          ns
+        ;; If the var was not interned, it might be referred.
+        (-if-let (referal (cider-resolve--get-in ns "refers" var))
+            (replace-regexp-in-string "/.*\\'" "" referal)
+          ;; Or it might be from core.
+          (unless (equal ns "clojure.core")
+            (when (cider-resolve-var "clojure.core" var)
+              "clojure.core")))))))
+
+;;; Dynamic font locking
+(defcustom cider-font-lock-dynamically '(macro core)
+  "Specifies how much dynamic font-locking CIDER should use.
+Dynamic font-locking this refers to applying syntax highlighting to vars
+defined in the currently active nREPL connection. This is done in addition
+to `clojure-mode's usual (static) font-lock, so even if you set this
+variable to nil you'll still see basic syntax highlighting.
+
+The value is a list of symbols, each one indicates a different type of var
+that should be font-locked:
+   `macro' (default): Any defined macro gets the `font-lock-builtin-face'.
+   `function': Any defined function gets the `font-lock-function-face'.
+   `var': Any non-local var gets the `font-lock-variable-face'.
+   `core' (default): Any symbol from clojure.core (face depends on type).
+
+The value can also be t, which means to font-lock as much as possible."
+  :type '(choice (set :tag "Fine-tune font-locking"
+                      (const :tag "Any defined macro" macro)
+                      (const :tag "Any defined function" function)
+                      (const :tag "Any defined var" var)
+                      (const :tag "Any symbol from clojure.core" core))
+                 (const :tag "Font-lock as much as possible" t))
+  :group 'cider
+  :package-version '(cider . "0.10.0"))
+
 (defun cider--valid-macro-place-p (pos)
   "Return non-nil if POS points to a valid place for a macro.
 This is either after a `(' or after a `#''.
@@ -75,29 +118,36 @@ Because you cannot take the value of macros in Clojure, a lone symbol like
 If (match-string N) is an instrumented symbol, return the list
     (face (FACE cider-instrumented-face))
 otherwise, return (face FACE)."
-  (let* ((decoration-level (font-lock-value-in-major-mode font-lock-maximum-decoration))
+  (let* ((fl-types (if (eq cider-font-lock-dynamically t)
+                       '(macro function var core)
+                     cider-font-lock-dynamically))
          (var (match-string n))
-         (meta (cider-resolve-var (cider-current-ns) var))
+         (ns (cider-current-ns))
+         (is-core-and-font-lock (and (memq 'core fl-types)
+                                     (equal (cider-resolve-var-ns ns var) "clojure.core")))
+         (meta (cider-resolve-var ns var))
          (spec (append (when face (list face))
                        (when (nrepl-dict-get meta "cider-instrumented")
                          '(cider-instrumented-face))
-                       (when decoration-level
-                         (unless (and (numberp decoration-level)
-                                      (< decoration-level 2))
-                           ;; Is it a macro, function, or var? And do we want to
-                           ;; font-lock that much?
-                           (cond
-                            ((nrepl-dict-get meta "macro")
+                       (when fl-types
+                         ;; Is it a macro, function, or var? And do we want to
+                         ;; font-lock that much?
+                         (cond
+                          ((nrepl-dict-get meta "macro")
+                           (when (or is-core-and-font-lock
+                                     (memq 'macro fl-types))
                              (when (cider--valid-macro-place-p (match-beginning n))
-                               '(font-lock-keyword-face)))
-                            ((nrepl-dict-get meta "arglists")
-                             (unless (and (numberp decoration-level)
-                                          (< decoration-level 3))
-                               '(font-lock-function-name-face)))
-                            (meta
-                             (unless (and (numberp decoration-level)
-                                          (< decoration-level 4))
-                               '(font-lock-variable-name-face)))))))))
+                               '(font-lock-keyword-face))))
+
+                          ((nrepl-dict-get meta "arglists")
+                           (when (or is-core-and-font-lock
+                                     (memq 'function fl-types))
+                             '(font-lock-function-name-face)))
+
+                          (meta
+                           (when (or is-core-and-font-lock
+                                     (memq 'var fl-types))
+                             '(font-lock-variable-name-face))))))))
     (when spec
       (list 'face spec))))
 
